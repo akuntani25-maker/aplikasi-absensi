@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Network Security Config
+  Docs: https://developer.android.com/training/articles/security-config
+
+  Untuk production, tambahkan certificate pinning:
+    <pin-set expiration="2026-01-01">
+      <pin digest="SHA-256">your-base64-encoded-pin==</pin>
+      <pin digest="SHA-256">backup-pin-base64==</pin>
+    </pin-set>
+
+  Cara dapat pin hash:
+    openssl s_client -connect your-project.supabase.co:443 < /dev/null 2>/dev/null \
+      | openssl x509 -outform DER \
+      | openssl dgst -sha256 -binary \
+      | openssl enc -base64
+-->
+<network-security-config>
+  <!-- Blokir clear-text traffic (HTTP) di semua domain -->
+  <base-config cleartextTrafficPermitted="false">
+    <trust-anchors>
+      <certificates src="system" />
+    </trust-anchors>
+  </base-config>
+
+  <!-- Izinkan localhost untuk development -->
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="true">localhost</domain>
+    <domain includeSubdomains="true">10.0.2.2</domain>
+  </domain-config>
+
+  <!-- Supabase domain — aktifkan pinning di production -->
+  <!--
+  <domain-config>
+    <domain includeSubdomains="true">supabase.co</domain>
+    <pin-set expiration="2026-12-31">
+      <pin digest="SHA-256">REPLACE_WITH_ACTUAL_PIN==</pin>
+      <pin digest="SHA-256">REPLACE_WITH_BACKUP_PIN==</pin>
+    </pin-set>
+  </domain-config>
+  -->
+</network-security-config>
