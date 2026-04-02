@@ -58,6 +58,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     typedRoutes: true,
   },
   plugins: [
+    ["./plugins/withKotlinVersion", { kotlinVersion: "1.9.25" }],
     [
       "expo-build-properties",
       {
