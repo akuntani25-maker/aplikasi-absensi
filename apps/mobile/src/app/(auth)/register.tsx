@@ -8,17 +8,21 @@ import { z } from 'zod';
 
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { useAuthActions } from '../../hooks/useAuth';
+import { authService } from '../../services/authService';
 
-const loginSchema = z.object({
+const registerSchema = z.object({
+  full_name: z.string().min(3, 'Nama minimal 3 karakter').max(100),
   email: z.string().email('Email tidak valid'),
   password: z.string().min(8, 'Password minimal 8 karakter'),
+  confirmPassword: z.string(),
+}).refine((d) => d.password === d.confirmPassword, {
+  message: 'Password tidak cocok',
+  path: ['confirmPassword'],
 });
 
-type LoginForm = z.infer<typeof loginSchema>;
+type RegisterForm = z.infer<typeof registerSchema>;
 
-export default function LoginScreen() {
-  const { login } = useAuthActions();
+export default function RegisterScreen() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -26,21 +30,30 @@ export default function LoginScreen() {
     control,
     handleSubmit,
     formState: { errors },
-  } = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+  } = useForm<RegisterForm>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { full_name: '', email: '', password: '', confirmPassword: '' },
   });
 
-  const onSubmit = async (data: LoginForm) => {
+  const onSubmit = async (data: RegisterForm) => {
     setIsLoading(true);
     try {
-      await login(data.email, data.password);
-    } catch (error: any) {
+      await authService.register({
+        email: data.email,
+        password: data.password,
+        full_name: data.full_name,
+      });
       Alert.alert(
-        'Login Gagal',
-        error?.message === 'Invalid login credentials'
-          ? 'Email atau password salah.'
-          : 'Terjadi kesalahan. Silakan coba lagi.',
+        'Registrasi Berhasil',
+        'Akun Anda berhasil dibuat. Silakan login.',
+        [{ text: 'Login', onPress: () => router.replace('/(auth)/login') }],
+      );
+    } catch (err: any) {
+      Alert.alert(
+        'Registrasi Gagal',
+        err?.message === 'User already registered'
+          ? 'Email sudah terdaftar. Gunakan email lain atau login.'
+          : err?.message ?? 'Terjadi kesalahan. Silakan coba lagi.',
       );
     } finally {
       setIsLoading(false);
@@ -63,12 +76,28 @@ export default function LoginScreen() {
             <View className="w-16 h-16 bg-blue-600 rounded-2xl items-center justify-center mb-4">
               <Text className="text-white text-3xl font-bold">A</Text>
             </View>
-            <Text className="text-3xl font-bold text-gray-900">Absensi</Text>
-            <Text className="mt-1 text-base text-gray-500">Sistem Absensi Karyawan</Text>
+            <Text className="text-3xl font-bold text-gray-900">Daftar Akun</Text>
+            <Text className="mt-1 text-base text-gray-500">Buat akun karyawan baru</Text>
           </View>
 
           {/* Form */}
           <View className="gap-4">
+            <Controller
+              control={control}
+              name="full_name"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Nama Lengkap"
+                  placeholder="Nama lengkap Anda"
+                  autoComplete="name"
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  value={value}
+                  error={errors.full_name?.message}
+                />
+              )}
+            />
+
             <Controller
               control={control}
               name="email"
@@ -92,10 +121,10 @@ export default function LoginScreen() {
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
                   label="Password"
-                  placeholder="Masukkan password"
+                  placeholder="Minimal 8 karakter"
                   secureTextEntry
                   secureToggle
-                  autoComplete="password"
+                  autoComplete="new-password"
                   onChangeText={onChange}
                   onBlur={onBlur}
                   value={value}
@@ -104,8 +133,26 @@ export default function LoginScreen() {
               )}
             />
 
+            <Controller
+              control={control}
+              name="confirmPassword"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Konfirmasi Password"
+                  placeholder="Ulangi password"
+                  secureTextEntry
+                  secureToggle
+                  autoComplete="new-password"
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  value={value}
+                  error={errors.confirmPassword?.message}
+                />
+              )}
+            />
+
             <Button
-              label="Masuk"
+              label="Daftar"
               variant="primary"
               size="lg"
               fullWidth
@@ -113,22 +160,15 @@ export default function LoginScreen() {
               onPress={handleSubmit(onSubmit)}
               className="mt-2"
             />
+
+            <Button
+              label="Sudah punya akun? Login"
+              variant="ghost"
+              size="md"
+              fullWidth
+              onPress={() => router.replace('/(auth)/login')}
+            />
           </View>
-
-          {/* Register link */}
-          <Button
-            label="Belum punya akun? Daftar"
-            variant="ghost"
-            size="md"
-            fullWidth
-            onPress={() => router.push('/(auth)/register')}
-            className="mt-4"
-          />
-
-          {/* Footer */}
-          <Text className="text-center text-xs text-gray-400 mt-6">
-            Hubungi admin jika mengalami masalah login
-          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
