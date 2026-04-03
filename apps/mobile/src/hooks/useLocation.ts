@@ -8,7 +8,7 @@ import { haversineMeters } from '../lib/haversine';
 export interface Office {
   id: string;
   name: string;
-  address: string;
+  address: string | null;
   latitude: number;
   longitude: number;
   radius_meters: number;

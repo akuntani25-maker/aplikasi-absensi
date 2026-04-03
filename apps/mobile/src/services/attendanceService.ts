@@ -47,7 +47,7 @@ export const attendanceService = {
   },
 
   async getMyDailyAttendance(date?: string) {
-    const targetDate = date ?? new Date().toISOString().split('T')[0];
+    const targetDate = date ?? new Date().toISOString().substring(0, 10);
     const { data, error } = await supabase
       .from('daily_attendance')
       .select('*')
@@ -58,7 +58,7 @@ export const attendanceService = {
   },
 
   async getTodayStatus(employeeId: string) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().substring(0, 10);
     const { data, error } = await supabase
       .from('daily_attendance')
       .select('*')

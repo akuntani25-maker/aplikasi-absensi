@@ -11,6 +11,7 @@ module.exports = {
   testMatch: [
     '<rootDir>/src/__tests__/lib/**/*.test.ts',
     '<rootDir>/src/__tests__/services/**/*.test.ts',
+    '<rootDir>/src/__tests__/hooks/**/*.test.ts',
   ],
   transform: {
     '^.+\\.tsx?$': [

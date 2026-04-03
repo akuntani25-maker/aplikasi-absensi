@@ -9,6 +9,7 @@ import { View, ActivityIndicator } from 'react-native';
 
 import { useAuthStore } from '../stores/useAuthStore';
 import { useAuthInit } from '../hooks/useAuth';
+import { useOfflineSync } from '../hooks/useOfflineSync';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const queryClient = new QueryClient({
@@ -27,6 +28,7 @@ function AuthGate() {
   const router = useRouter();
 
   useAuthInit();
+  useOfflineSync(); // sync antrian offline saat koneksi tersedia
 
   useEffect(() => {
     if (!isInitialized) return;
