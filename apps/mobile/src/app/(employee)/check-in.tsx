@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { View, Text, ScrollView, Alert, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -10,23 +10,32 @@ import { LocationStatus } from '../../components/attendance/LocationStatus';
 import { FaceCameraView } from '../../components/camera/FaceCameraView';
 import { useLocation } from '../../hooks/useLocation';
 import { useFaceDetection } from '../../hooks/useFaceDetection';
+import { useAttendance } from '../../hooks/useAttendance';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { attendanceService } from '../../services/attendanceService';
-import { faceService } from '../../services/faceService';
 
-type CheckInStep = 'location' | 'face' | 'submitting' | 'done';
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-function StepBadge({ current, step }: { current: CheckInStep; step: CheckInStep }) {
-  const order: CheckInStep[] = ['location', 'face', 'submitting', 'done'];
-  const ci = order.indexOf(current);
-  const si = order.indexOf(step);
+type CheckType = 'check_in' | 'check_out';
+type ScreenStep = 'location' | 'face' | 'submitting' | 'done' | 'offline_queued';
+
+// ─── Step badge ───────────────────────────────────────────────────────────────
+
+function StepBadge({ current, step }: { current: ScreenStep; step: ScreenStep }) {
+  const ORDER: ScreenStep[] = ['location', 'face', 'submitting', 'done'];
+  const ci = ORDER.indexOf(current);
+  const si = ORDER.indexOf(step);
   if (si < ci) return <Badge label="✓ Selesai" variant="success" />;
   if (si === ci) return <Badge label="Aktif" variant="info" />;
   return <Badge label="Menunggu" variant="neutral" />;
 }
 
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
 export default function CheckInScreen() {
   const router = useRouter();
+  const { type: typeParam } = useLocalSearchParams<{ type?: CheckType }>();
+  const checkType: CheckType = typeParam === 'check_out' ? 'check_out' : 'check_in';
+
   const { profile } = useAuthStore();
   const { state: locState, validate, reset: resetLoc } = useLocation();
   const {
@@ -39,79 +48,58 @@ export default function CheckInScreen() {
     markChallengePassed,
     reset: resetFace,
   } = useFaceDetection();
+  const { submit, submitStatus, reset: resetAttendance } = useAttendance();
 
-  const [step, setStep] = useState<CheckInStep>('location');
+  const [step, setStep] = useState<ScreenStep>('location');
 
-  // Auto-validate GPS saat pertama buka
+  const title = checkType === 'check_out' ? 'Absen Keluar' : 'Absen Masuk';
+
+  // Auto-validate GPS saat layar terbuka
   useEffect(() => {
     validate();
-    return () => { resetLoc(); resetFace(); };
+    return () => {
+      resetLoc();
+      resetFace();
+      resetAttendance();
+    };
   }, []);
 
-  // Pindah ke step face saat lokasi valid
+  // Transisi step: lokasi valid → buka kamera
   useEffect(() => {
-    if (locState.status === 'valid' && step === 'location') {
-      setStep('face');
-    }
-    if (locState.status !== 'valid' && step === 'face') {
-      setStep('location');
-    }
+    if (locState.status === 'valid' && step === 'location') setStep('face');
+    if (locState.status !== 'valid' && step === 'face') setStep('location');
   }, [locState.status, step]);
 
+  // Buka kamera
   const handleOpenCamera = useCallback(async () => {
     const granted = await askPermission();
     if (!granted) {
-      Alert.alert('Izin Kamera', 'Aktifkan kamera di Pengaturan untuk verifikasi wajah.');
+      Alert.alert('Izin Kamera', 'Aktifkan izin kamera di Pengaturan untuk verifikasi wajah.');
     }
   }, [askPermission]);
 
-  const handleChallengePassed = useCallback(async () => {
-    await markChallengePassed();
-  }, [markChallengePassed]);
-
+  // Submit absensi setelah liveness challenge passed
   const handleSubmit = useCallback(async () => {
     if (!profile || !locState.nearestOffice || !faceDetState.capturedFrame) return;
     setStep('submitting');
 
-    try {
-      // 1. Verifikasi wajah via Supabase Edge Function
-      if (!profile.face_reference_id) {
-        throw new Error('Wajah belum terdaftar. Silakan lakukan pendaftaran wajah terlebih dahulu.');
-      }
+    const result = await submit({
+      type: checkType,
+      locationState: locState,
+      capturedFrame: faceDetState.capturedFrame,
+      livenessOk: true,
+    });
 
-      const verifyResult = await faceService.verifyFace(
-        faceDetState.capturedFrame,
-        profile.face_reference_id,
-      );
-
-      if (!verifyResult.match) {
-        throw new Error(`Wajah tidak cocok (confidence: ${(verifyResult.confidence * 100).toFixed(0)}%). Coba lagi.`);
-      }
-
-      // 2. Simpan record absensi
-      await attendanceService.createRecord({
-        employee_id: profile.id,
-        office_id: locState.nearestOffice.id,
-        type: 'check_in',
-        status: 'valid',
-        latitude: locState.latitude ?? undefined,
-        longitude: locState.longitude ?? undefined,
-        distance_meters: locState.distanceMeters ?? undefined,
-        location_valid: true,
-        location_accuracy: locState.accuracy ?? undefined,
-        is_mock_location: false,
-        face_confidence: verifyResult.confidence,
-        face_valid: true,
-        liveness_passed: true,
-      });
-
+    if (result.status === 'success') {
       setStep('done');
-    } catch (err: any) {
+    } else if (result.status === 'offline_queued') {
+      setStep('offline_queued');
+    } else {
       setStep('face');
       resetFace();
-      Alert.alert('Absensi Gagal', err?.message ?? 'Terjadi kesalahan. Coba lagi.');
+      Alert.alert('Absensi Gagal', result.error ?? 'Terjadi kesalahan. Coba lagi.');
     }
-  }, [profile, locState, faceDetState, resetFace]);
+  }, [profile, locState, faceDetState.capturedFrame, checkType, submit, resetFace]);
 
   // ─── DONE ─────────────────────────────────────────────────────────────────
   if (step === 'done') {
@@ -120,10 +108,18 @@ export default function CheckInScreen() {
         <View className="w-24 h-24 bg-green-100 rounded-full items-center justify-center">
           <Text className="text-5xl">✅</Text>
         </View>
-        <Text className="text-2xl font-bold text-gray-900">Absensi Berhasil!</Text>
+        <Text className="text-2xl font-bold text-gray-900">
+          {checkType === 'check_out' ? 'Absen Keluar Berhasil!' : 'Absen Masuk Berhasil!'}
+        </Text>
         <Text className="text-base text-gray-500 text-center">
-          Absensi masuk Anda telah tercatat di{'\n'}
-          <Text className="font-semibold text-gray-700">{locState.nearestOffice?.name}</Text>
+          {checkType === 'check_out'
+            ? 'Absensi keluar Anda telah tercatat.'
+            : `Absensi masuk Anda telah tercatat di\n`}
+          {checkType === 'check_in' && (
+            <Text className="font-semibold text-gray-700">
+              {locState.nearestOffice?.name}
+            </Text>
+          )}
         </Text>
         <Button
           label="Selesai"
@@ -136,13 +132,44 @@ export default function CheckInScreen() {
     );
   }
 
+  // ─── OFFLINE QUEUED ────────────────────────────────────────────────────────
+  if (step === 'offline_queued') {
+    return (
+      <SafeAreaView className="flex-1 bg-white items-center justify-center gap-5 px-6">
+        <View className="w-24 h-24 bg-yellow-100 rounded-full items-center justify-center">
+          <Text className="text-5xl">📶</Text>
+        </View>
+        <Text className="text-2xl font-bold text-gray-900">Tersimpan Offline</Text>
+        <Text className="text-base text-gray-500 text-center leading-6">
+          Tidak ada koneksi internet. Absensi disimpan dan akan dikirim otomatis saat koneksi tersedia.
+        </Text>
+        <View className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 w-full">
+          <Text className="text-sm text-yellow-700 text-center font-medium">
+            ⚠️ Absensi menunggu sinkronisasi
+          </Text>
+        </View>
+        <Button
+          label="Kembali ke Beranda"
+          variant="primary"
+          size="lg"
+          fullWidth
+          onPress={() => router.back()}
+        />
+      </SafeAreaView>
+    );
+  }
+
   // ─── SUBMITTING ───────────────────────────────────────────────────────────
   if (step === 'submitting') {
+    const label =
+      submitStatus === 'verifying_face'
+        ? 'Memverifikasi wajah...'
+        : 'Menyimpan absensi...';
     return (
       <SafeAreaView className="flex-1 bg-white items-center justify-center gap-4">
         <Text className="text-5xl">⏳</Text>
-        <Text className="text-lg font-semibold text-gray-800">Memproses absensi...</Text>
-        <Text className="text-sm text-gray-500">Verifikasi wajah & simpan data</Text>
+        <Text className="text-lg font-semibold text-gray-800">{label}</Text>
+        <Text className="text-sm text-gray-500">Harap tunggu sebentar</Text>
       </SafeAreaView>
     );
   }
@@ -161,14 +188,14 @@ export default function CheckInScreen() {
           progress={faceDetState.progress}
           device={device}
           onFaceDetectedForChallenge={startChallenge}
-          onChallengePassed={handleChallengePassed}
+          onChallengePassed={markChallengePassed}
           onRetry={resetFace}
         />
 
         {faceDetState.challengeStatus === 'passed' && (
           <View className="absolute bottom-32 left-6 right-6">
             <Button
-              label="Konfirmasi Absensi"
+              label={`Konfirmasi ${title}`}
               variant="primary"
               size="lg"
               fullWidth
@@ -192,7 +219,7 @@ export default function CheckInScreen() {
     );
   }
 
-  // ─── LOCATION + FACE GATE ────────────────────────────────────────────────
+  // ─── LOCATION + FACE GATE ─────────────────────────────────────────────────
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView
@@ -201,7 +228,7 @@ export default function CheckInScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View className="flex-row items-center justify-between">
-          <Text className="text-2xl font-bold text-gray-900">Absen Masuk</Text>
+          <Text className="text-2xl font-bold text-gray-900">{title}</Text>
           <Button label="Tutup" variant="ghost" size="sm" onPress={() => router.back()} />
         </View>
 
@@ -213,7 +240,13 @@ export default function CheckInScreen() {
           </View>
           <LocationStatus state={locState} />
           {(locState.status === 'invalid' || locState.status === 'error') && (
-            <Button label="Coba Lagi" variant="outline" size="sm" onPress={validate} className="mt-3" />
+            <Button
+              label="Coba Lagi"
+              variant="outline"
+              size="sm"
+              onPress={validate}
+              className="mt-3"
+            />
           )}
         </Card>
 
@@ -226,7 +259,7 @@ export default function CheckInScreen() {
           {locState.status === 'valid' ? (
             <View className="gap-3">
               <Text className="text-sm text-gray-500">
-                Lokasi valid. Lanjutkan dengan verifikasi wajah menggunakan kamera depan.
+                Lokasi valid. Lanjutkan verifikasi wajah dengan kamera depan.
               </Text>
               <Button
                 label="Buka Kamera"

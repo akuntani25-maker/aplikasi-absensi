@@ -45,7 +45,7 @@ function AuthGate() {
       router.replace('/(employee)/face-enrollment');
     } else if (session && inAuthGroup) {
       // Sudah login dan wajah sudah terdaftar
-      router.replace('/(employee)/(tabs)/');
+      router.replace('/');
     }
   }, [session, profile, isInitialized, segments]);
 

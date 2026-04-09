@@ -145,7 +145,7 @@ export default function FaceEnrollmentScreen() {
           variant="primary"
           size="lg"
           fullWidth
-          onPress={() => router.replace('/(employee)/(tabs)/')}
+          onPress={() => router.replace('/')}
         />
       </SafeAreaView>
     );
