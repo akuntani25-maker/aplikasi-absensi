@@ -58,6 +58,18 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     typedRoutes: true,
   },
   plugins: [
+    ...(process.env.EXPO_PUBLIC_SENTRY_DSN
+      ? [
+          [
+            "@sentry/react-native/expo",
+            {
+              url: "https://sentry.io/",
+              project: "aplikasi-absensi",
+              organization: "your-org-slug",
+            },
+          ] as [string, Record<string, string>],
+        ]
+      : []),
     ["./plugins/withKotlinVersion", { kotlinVersion: "1.9.25" }],
     [
       "expo-build-properties",
