@@ -6,9 +6,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, ActivityIndicator } from 'react-native';
-// Sentry temporarily disabled for diagnostics
-// import * as Sentry from '@sentry/react-native';
-const SENTRY_DSN: string | undefined = undefined;
+import * as Sentry from '@sentry/react-native';
+
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    debug: __DEV__,
+    tracesSampleRate: __DEV__ ? 0 : 0.2,
+    environment: __DEV__ ? 'development' : 'production',
+  });
+}
 
 import { useAuthStore } from '../stores/useAuthStore';
 import { useAuthInit } from '../hooks/useAuth';
@@ -83,4 +92,4 @@ function RootLayout() {
   );
 }
 
-export default RootLayout;
+export default SENTRY_DSN ? Sentry.wrap(RootLayout) : RootLayout;

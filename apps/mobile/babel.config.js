@@ -12,7 +12,7 @@ module.exports = function (api) {
           reanimated: !isTest,
         },
       ],
-      // "nativewind/babel", // temporarily disabled for diagnostics
+      "nativewind/babel",
     ],
     plugins: [],
   };
