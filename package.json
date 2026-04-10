@@ -25,6 +25,8 @@
   },
   "packageManager": "npm@10.9.2",
   "dependencies": {
-    "ajv": "^8.18.0"
+    "@expo/ngrok": "^4.1.3",
+    "ajv": "^8.18.0",
+    "react-native-worklets": "npm:react-native-worklets-core@^1.6.3"
   }
 }

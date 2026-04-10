@@ -12,8 +12,8 @@ module.exports = function (api) {
           reanimated: !isTest,
         },
       ],
-      "nativewind/babel",
+      // "nativewind/babel", // temporarily disabled for diagnostics
     ],
-    plugins: isTest ? [] : ["react-native-reanimated/plugin"],
+    plugins: [],
   };
 };

@@ -44,7 +44,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   web: {
     favicon: "./src/assets/favicon.png",
-    bundler: "metro",
   },
   scheme: "absensi",
   runtimeVersion: {
