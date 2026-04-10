@@ -16,6 +16,10 @@ if (SENTRY_DSN) {
     debug: __DEV__,
     tracesSampleRate: __DEV__ ? 0 : 0.2,
     environment: __DEV__ ? 'development' : 'production',
+    // Disable expo-updates integration — expo-updates is not installed
+    // and this integration crashes with "Requiring unknown module" if absent
+    integrations: (integrations) =>
+      integrations.filter((i) => i.name !== 'ExpoUpdates'),
   });
 }
 
